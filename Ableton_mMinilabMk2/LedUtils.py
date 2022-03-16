@@ -2,6 +2,7 @@ from __future__ import absolute_import, print_function, unicode_literals
 import time
 from itertools import cycle
 import logging
+
 logger = logging.getLogger(__name__)
 
 from .Constants import BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE
@@ -11,16 +12,18 @@ PADS = [112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 12
 DEFAULT_BLINK = 1
 
 
-
-def blink_conditioned(self, condition=lambda: False, pad_number=120, colors=[RED, BLACK], timeout=3):
+def blink_conditioned(
+    self, condition=lambda: False, pad_number=120, colors=[RED, BLACK], timeout=3
+):
     c = cycle(colors)
+
     def callback():
         if condition():
             _send_color(self, pad_number, next(c))
             self.schedule_message(timeout, callback)
         else:
             _send_color(self, pad_number, BLACK)
-    
+
     # give the condition some time (1 tick) to fulfil itself
     self.schedule_message(1, callback)
 
@@ -64,26 +67,26 @@ def _leds_NormalMode(self, song_instance):
         else:
             _send_color(self, 120, WHITE)
             _send_color(self, 121, BLACK)
-    
+
     if song_instance.overdub:
         # _send_color(self, 120, RED) # extra
         _send_color(self, 122, RED)
     else:
         _send_color(self, 122, MAGENTA)
-    
+
     # undo
     if song_instance.can_undo:
         _send_color(self, 123, BLUE)
     else:
         _send_color(self, 123, BLACK)
-    
+
     # * alternate detail view
     _send_color(self, 124, WHITE)
     _send_color(self, 125, BLACK)
     # self._blink(True, 125, timeout=5, colors=[0, 20])
     # new scene
     _send_color(self, 126, RED)
-    
+
     scene_selected = song_instance.view.selected_scene
     if scene_selected.is_empty:
         _send_color(self, 127, BLACK)
@@ -116,7 +119,7 @@ def _leds_ClipMode(self, song_instance):
         _send_color(self, 125, BLACK)
         _send_color(self, 126, BLACK)
         _send_color(self, 127, BLACK)
-    
+
     else:
         if not clip.is_playing:
             # * scrub
