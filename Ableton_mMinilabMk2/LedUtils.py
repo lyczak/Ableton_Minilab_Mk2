@@ -4,7 +4,7 @@ from itertools import cycle
 import logging
 logger = logging.getLogger(__name__)
 
-from Ableton_mMinilabMk2.Constants import BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE
+from .Constants import BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE
 
 COLORS = [BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE]
 PADS = [112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127]
@@ -56,22 +56,27 @@ def _off_leds(self):
 def _leds_NormalMode(self, song_instance):
     if song_instance.is_playing:
         _send_color(self, 120, GREEN)
-        _send_color(self, 121, WHITE)
+        _send_color(self, 121, RED)
     else:
-        _send_color(self, 120, YELLOW)
         if song_instance.current_song_time > 0:
-            _send_color(self, 121, CYAN)
-        else:
+            _send_color(self, 120, YELLOW)
             _send_color(self, 121, BLUE)
+        else:
             _send_color(self, 120, WHITE)
+            _send_color(self, 121, BLACK)
     
     if song_instance.overdub:
+        # _send_color(self, 120, RED) # extra
         _send_color(self, 122, RED)
     else:
         _send_color(self, 122, MAGENTA)
     
     # undo
-    _send_color(self, 123, CYAN)
+    if song_instance.can_undo:
+        _send_color(self, 123, BLUE)
+    else:
+        _send_color(self, 123, BLACK)
+    
     # * alternate detail view
     _send_color(self, 124, WHITE)
     _send_color(self, 125, BLACK)
