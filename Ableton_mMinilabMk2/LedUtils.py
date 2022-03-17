@@ -82,10 +82,20 @@ def _leds_NormalMode(self, song_instance):
 
     # * alternate detail view
     _send_color(self, 124, WHITE)
-    _send_color(self, 125, BLACK)
+    
+    selected_track = song_instance.view.selected_track
+    if selected_track.solo:
+        _send_color(self, 125, BLUE)
+    else:
+        _send_color(self, 125, BLACK)
+    
+    if selected_track.arm:
+        _send_color(self, 126, RED)
+    else:
+        _send_color(self, 126, BLACK)
     # self._blink(True, 125, timeout=5, colors=[0, 20])
     # new scene
-    _send_color(self, 126, RED)
+    # _send_color(self, 126, RED)
 
     scene_selected = song_instance.view.selected_scene
     if scene_selected.is_empty:
@@ -131,3 +141,51 @@ def _leds_ClipMode(self, song_instance):
             _send_color(self, 126, GREEN)
             # * play clip
             _send_color(self, 127, GREEN)
+
+def _leds_MuteMode(self):
+    session_tracks = self._session.current_tracks
+    offset = self._session.track_offset()
+    total_v_tracks = self.song().visible_tracks
+    
+    for pad_number in range(len(session_tracks)):
+        track_number = offset + pad_number
+        pad_track = total_v_tracks[track_number]
+        
+        color = BLACK if pad_track.mute else YELLOW
+        _send_color(self, 112 + pad_number, color)
+        _send_color(self, 112 + 8 + pad_number, color)
+    
+    for pad_number in range(len(session_tracks), 8):
+        _send_color(self, 112 + pad_number, BLACK)
+        _send_color(self, 112 + 8 + pad_number, BLACK)
+        
+
+def _leds_ArmMode(self):
+    session_tracks = self._session.current_tracks
+    offset = self._session.track_offset()
+    total_v_tracks = self.song_instance.visible_tracks
+    
+    for pad_number in range(len(session_tracks)):
+        track_number = offset + pad_number
+        pad_track = total_v_tracks[track_number]
+        try:
+            if pad_track.can_be_armed:
+                if pad_track.arm:
+                    color = RED
+                elif pad_track.mute:
+                    color = BLACK
+                else:
+                    color = YELLOW
+            else:
+                color = BLACK
+            _send_color(self, 112 + pad_number, color)
+            _send_color(self, 112 + 8 + pad_number, color)
+        except RuntimeError as e:
+            logger.info(" : Error : " + str(pad_track.name))
+            logger.info(" : Error : " + str(e))
+            continue
+    
+    for pad_number in range(len(session_tracks), 8):
+        _send_color(self, 112 + pad_number, BLACK)
+        _send_color(self, 112 + 8 + pad_number, BLACK)
+

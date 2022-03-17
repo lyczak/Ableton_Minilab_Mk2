@@ -426,17 +426,27 @@ class Actions(object):
     def button_playpause(self):
         if self.song_instance.is_playing:
             self.song_instance.stop_playing()
+        elif self.song_instance.current_song_time > 0:
+            self.song_instance.continue_playing()
         else:
-            if self.song_instance.current_song_time > 0:
-                self.song_instance.continue_playing()
             self.song_instance.start_playing()
         # logger.info(" Button :: button_playpause")
+    
+    def button_stopjump(self):
+        if self.song_instance.is_playing:
+            self.song_instance.stop_playing()
+        elif self.song_instance.current_song_time > 0:
+            self.song_instance.current_song_time = 0
 
     def button_overdub(self):
         if self.song_instance.overdub:
             self.song_instance.overdub = False
         else:
             self.song_instance.overdub = True
+
+    def button_solo(self):
+        current_track = self.song_instance.view.selected_track
+        current_track.solo = not current_track.solo
 
     def button_quantize_song(self):
         q_actual = self.song_instance.clip_trigger_quantization
@@ -462,6 +472,20 @@ class Actions(object):
             if q_actual_index > 13:
                 q_actual_index = 0
             self.song_instance.clip_trigger_quantization = QUANTIZATIONS[q_actual_index]
+
+    def button_soloexclusive(self):
+        current_track = self.song_instance.view.selected_track
+        is_soloed = current_track.solo
+        for track in self.song_instance.tracks:
+            track.solo = False
+        current_track.solo = not is_soloed
+
+    def button_armexclusive(self):
+        current_track = self.song_instance.view.selected_track
+        is_armed = current_track.arm
+        for track in self.song_instance.tracks:
+            track.arm = False
+        current_track.arm = not is_armed
 
     def button_scrub(self, value):
         clip = self.song_instance.view.detail_clip

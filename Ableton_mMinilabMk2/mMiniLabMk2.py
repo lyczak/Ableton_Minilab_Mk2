@@ -44,6 +44,8 @@ from .LedUtils import (
     blink_conditioned,
     _color_leds,
     _send_color,
+    _leds_MuteMode,
+    _leds_ArmMode,
 )
 from .Actions import Actions
 
@@ -121,7 +123,7 @@ class mMiniLabMk2(ArturiaControlSurface):
 
     encoder_msg_channel = 0
     # button_encoder_msg_channel = 9 en el preset pero se cambia, en este caso a 2
-    button_encoder_msg_channel = 2
+    button_encoder_msg_channel = 10  # 2
     alt_button_encoder_msg_channel = 2
     encoder_msg_ids = (
         7,
@@ -531,6 +533,8 @@ class mMiniLabMk2(ArturiaControlSurface):
     # endregion
 
     def _setup_control_listeners(self):
+        logger.info("MMINILABMK2 add listeners")
+
         if not self._pads2[8].value_has_listener(self._pads2_n8):
             self._pads2[8].add_value_listener(self._pads2_n8, identify_sender=False)
         if not self._pads2[9].value_has_listener(self._pads2_n9):
@@ -707,14 +711,14 @@ class mMiniLabMk2(ArturiaControlSurface):
             self.shift_active = True
             self._mixer.set_track_select_encoder(None)
             self._mixer.set_selected_track_arm_control(None)
-            self._transport.set_overdub_button(None)
+            # self._transport.set_overdub_button(None)
             self.show_message("SHIFT activo")
         else:
             self.shift_active = False
             if self.modo_clip_activo:
                 _shift_led(self, True)
             self._mixer.set_track_select_encoder(self._knob0_encoder)
-            self._transport.set_overdub_button(self._pads2[10])
+            # self._transport.set_overdub_button(self._pads2[10])
             self.show_message("SHIFT inactivo")
         self._update_leds()
 
@@ -758,50 +762,49 @@ class mMiniLabMk2(ArturiaControlSurface):
         else:
             self._mixer.set_track_select_encoder(self._knob0_encoder)
 
+    def _update_component_state(self): # disable session/transport for enc 0/8
+        mute_mode = self.enc0_button
+        arm_mode = self.enc8_button
+        state = (not (mute_mode or arm_mode)) and self.live_mode
+        self._transport.set_enabled(state)
+        self._session.set_enabled(state)
+
     # * Boton de knob 1 (0), Cambia  de vista entre clip y device tambien hace zoom al loop del clip,
     # *  con shift pulsado oculta la vista de detalle
     def _encoder_n0_button(self, value):
-        if value > 0:
-            self.enc0_button = True
+        # logger.info(" : Encoder n0 button : " + str(value))
 
-            self._session.set_enabled(False)
-            # self._session.clip_launch_buttons(False)
-            session_tracks = self._session.current_tracks
-            visible_session_pads_number = len(session_tracks)
-            offset = self._session.track_offset()
-            total_v_tracks = self.song().visible_tracks
-            while visible_session_pads_number > 0:
-                visible_session_pads_number -= 1
-                pad_number = visible_session_pads_number
-                # logger.info(" : pad n: " + str(pad_number))
-                track_number = offset + pad_number
-                pad_track = total_v_tracks[track_number]
-                if pad_track.mute:
-                    _send_color(self, 112 + pad_number, CYAN)
-
-            # * shift, hide / show detail
-            if self.shift_active:
-                # * shift, hide / show detail
-                # self.Actions.button_hide_viewdetail()
-                # * Fold / unfold track in session
-                is_folder = self.Actions.button_track_fold()
-                if not is_folder:
-                    # * Modo Clip y Normal, change view (device - clip)
-                    # else:
-                    # * Detail
-                    if not self.application().view.is_view_visible("Detail"):
-                        self.application().view.focus_view("Detail")
-                        self.application().view.zoom_view(1, "Detail", True)
-                    # * Detail/Clip, Detail/DeviceChain
-                    if not self.application().view.is_view_visible(
-                        "Detail/DeviceChain"
-                    ):
-                        self.application().view.focus_view("Detail/DeviceChain")
-                    else:
-                        self.application().view.focus_view("Detail/Clip")
-        else:
-            self.enc0_button = False
-            self._session.set_enabled(True)
+        # if value > 0:
+        #     self.enc0_button = True
+        #     # self._session.clip_launch_buttons(False)
+        #
+        #     # _leds_MuteMode(self)
+        #
+        #     # * shift, hide / show detail
+        #     if self.shift_active:
+        #         # * shift, hide / show detail
+        #         # self.Actions.button_hide_viewdetail()
+        #         # * Fold / unfold track in session
+        #         is_folder = self.Actions.button_track_fold()
+        #         if not is_folder:
+        #             # * Modo Clip y Normal, change view (device - clip)
+        #             # else:
+        #             # * Detail
+        #             if not self.application().view.is_view_visible("Detail"):
+        #                 self.application().view.focus_view("Detail")
+        #                 self.application().view.zoom_view(1, "Detail", True)
+        #             # * Detail/Clip, Detail/DeviceChain
+        #             if not self.application().view.is_view_visible(
+        #                 "Detail/DeviceChain"
+        #             ):
+        #                 self.application().view.focus_view("Detail/DeviceChain")
+        #             else:
+        #                 self.application().view.focus_view("Detail/Clip")
+        # else:
+        #     self.enc0_button = False
+        self.enc0_button = value > 0
+        self._update_component_state()
+        self._update_leds()
 
     # * no implementado
     def _encoder_n8(self, value):
@@ -815,54 +818,40 @@ class mMiniLabMk2(ArturiaControlSurface):
     # * si ya esta el Modo Clip en Detail/Clip hace zoom al clip
     # *                         en Detail/DeviceChain activa el device
     def _encoder_n8_button(self, value):
-        if value > 0:
-            self.enc8_button = True
-
-            self._session.set_enabled(False)
-            session_tracks = self._session.current_tracks
-            visible_session_pads_number = len(session_tracks)
-            offset = self._session.track_offset()
-            total_v_tracks = self.song_instance.visible_tracks
-            while visible_session_pads_number > 0:
-                visible_session_pads_number -= 1
-                pad_number = visible_session_pads_number
-                track_number = offset + pad_number
-                pad_track = total_v_tracks[track_number]
-                try:
-                    if pad_track.can_be_armed:
-                        if pad_track.arm:
-                            _send_color(self, 112 + pad_number, RED)
-                except RuntimeError as e:
-                    logger.info(" : Error : " + str(pad_track.name))
-                    logger.info(" : Error : " + str(e))
-                    continue
-
-            # * shift, enter Modo Clip
-            if self.shift_active:
-                self.show_message("Modo Clip activo")
-                self.modo_clip_activo = True
-                _shift_led(self, True)
-                self._device.set_on_off_button(None)
-
-                # ! !!!
-                self.Actions.focus_onplaying_clip()
-
-            # * Modo Clip
-            elif self.modo_clip_activo:
-                # * Detail/Clip, nope
-                if self.application().view.is_view_visible("Detail/Clip"):
-                    self._device.set_on_off_button(None)
-                    # * Focus on clip loop
-                    self.Actions.button_focus_cliploop()
-
-                elif self.application().view.is_view_visible("Detail/DeviceChain"):
-                    self._device.set_on_off_button(self._knob8_button)
-                    # * Detail/DeviceChain, activate device
-                    self.Actions.button_activate_device()
-        else:
-            self._device.set_on_off_button(None)
-            self.enc8_button = False
-            self._session.set_enabled(True)
+        # logger.info(" : Encoder n8 button : " + str(value))
+        # if value > 0:
+        #     self.enc8_button = True
+        #
+        #     # _leds_ArmMode(self)
+        #
+        #     # * shift, enter Modo Clip
+        #     if self.shift_active:
+        #         self.show_message("Modo Clip activo")
+        #         self.modo_clip_activo = True
+        #         _shift_led(self, True)
+        #         self._device.set_on_off_button(None)
+        #
+        #         # ! !!!
+        #         self.Actions.focus_onplaying_clip()
+        #
+        #     # * Modo Clip
+        #     elif self.modo_clip_activo:
+        #         # * Detail/Clip, nope
+        #         if self.application().view.is_view_visible("Detail/Clip"):
+        #             self._device.set_on_off_button(None)
+        #             # * Focus on clip loop
+        #             self.Actions.button_focus_cliploop()
+        #
+        #         elif self.application().view.is_view_visible("Detail/DeviceChain"):
+        #             self._device.set_on_off_button(self._knob8_button)
+        #             # * Detail/DeviceChain, activate device
+        #             self.Actions.button_activate_device()
+        # else:
+        #     self._device.set_on_off_button(None)
+        #     self.enc8_button = False
+        self.enc8_button = value > 0
+        self._update_component_state()
+        self._update_leds()
 
     # * vol send a / set start marker, select device preset/ simpler
     def _encoder_n5(self, value):
@@ -1035,113 +1024,83 @@ class mMiniLabMk2(ArturiaControlSurface):
         # logger.info("_pads_n" + str(pad_id) + " : session track name: " + str(relevant_track.name))
         return relevant_track
 
-    def _pads_n0(self, value):
-        pad_id = 0
-        # logger.info("_pads_n" + str(pad_id) + " : value: " + str(value))
+    def try_handle_track_action(
+        self, pad_id, value
+    ):  # True if pad press was handled as track action
+        self._update_leds()
+        mute_mode = self.enc0_button
+        arm_mode = self.enc8_button
+        logger.info(
+            "try_handle_track_action: pad %d value %d %s mode"
+            % (pad_id, value, "mute" if mute_mode else ("arm" if arm_mode else "no"))
+        )
+
+        if not (mute_mode or arm_mode):
+            return False  # no track action to handle--proceed
+
+        if value <= 0:
+            return True  # we ignore pad release--nothing to do
+
+        pad_id = pad_id % 8  # pads 8 wide; modes should work on either page
         relevant_track = self.get_session_track(pad_id)
         if relevant_track is None:
-            return
+            return True
 
-        if value > 0:
-            if self.enc8_button and relevant_track.can_be_armed:
-                relevant_track.arm = not relevant_track.arm
-            if self.enc0_button:
-                relevant_track.mute = not relevant_track.mute
+        if mute_mode:  # mute mode
+            relevant_track.mute = not relevant_track.mute
+        elif arm_mode:  # arm mode
+            relevant_track.arm = not relevant_track.arm
+
+        self._update_leds()
+        return True
+
+    def _pads_n0(self, value):
+        pad_id = 0
+        self.try_handle_track_action(pad_id, value)
 
     def _pads_n1(self, value):
         pad_id = 1
-        relevant_track = self.get_session_track(pad_id)
-        if relevant_track is None:
-            return
-
-        if value > 0:
-            if self.enc8_button and relevant_track.can_be_armed:
-                relevant_track.arm = not relevant_track.arm
-            if self.enc0_button:
-                relevant_track.mute = not relevant_track.mute
+        self.try_handle_track_action(pad_id, value)
 
     def _pads_n2(self, value):
         pad_id = 2
-        relevant_track = self.get_session_track(pad_id)
-        if relevant_track is None:
-            return
-
-        if value > 0:
-            if self.enc8_button and relevant_track.can_be_armed:
-                relevant_track.arm = not relevant_track.arm
-            if self.enc0_button:
-                relevant_track.mute = not relevant_track.mute
+        self.try_handle_track_action(pad_id, value)
 
     def _pads_n3(self, value):
         pad_id = 3
-        relevant_track = self.get_session_track(pad_id)
-        if relevant_track is None:
-            return
-
-        if value > 0:
-            if self.enc8_button and relevant_track.can_be_armed:
-                relevant_track.arm = not relevant_track.arm
-            if self.enc0_button:
-                relevant_track.mute = not relevant_track.mute
+        self.try_handle_track_action(pad_id, value)
 
     def _pads_n4(self, value):
         pad_id = 4
-        relevant_track = self.get_session_track(pad_id)
-        if relevant_track is None:
-            return
-
-        if value > 0:
-            if self.enc8_button and relevant_track.can_be_armed:
-                relevant_track.arm = not relevant_track.arm
-            if self.enc0_button:
-                relevant_track.mute = not relevant_track.mute
+        self.try_handle_track_action(pad_id, value)
 
     def _pads_n5(self, value):
         pad_id = 5
-        relevant_track = self.get_session_track(pad_id)
-        if relevant_track is None:
-            return
-
-        if value > 0:
-            if self.enc8_button and relevant_track.can_be_armed:
-                relevant_track.arm = not relevant_track.arm
-            if self.enc0_button:
-                relevant_track.mute = not relevant_track.mute
+        self.try_handle_track_action(pad_id, value)
 
     def _pads_n6(self, value):
         pad_id = 6
-        relevant_track = self.get_session_track(pad_id)
-        if relevant_track is None:
-            return
-
-        if value > 0:
-            if self.enc8_button and relevant_track.can_be_armed:
-                relevant_track.arm = not relevant_track.arm
-            if self.enc0_button:
-                relevant_track.mute = not relevant_track.mute
+        self.try_handle_track_action(pad_id, value)
 
     def _pads_n7(self, value):
         pad_id = 7
-        relevant_track = self.get_session_track(pad_id)
-        if relevant_track is None:
-            return
-
-        if value > 0:
-            if self.enc8_button and relevant_track.can_be_armed:
-                relevant_track.arm = not relevant_track.arm
-            if self.enc0_button:
-                relevant_track.mute = not relevant_track.mute
+        self.try_handle_track_action(pad_id, value)
 
     # ? PADS 2
     # * n120 - play button / arm track and overdub
     def _pads2_n8(self, value):
+        pad_id = 8
+        if self.try_handle_track_action(pad_id, value):
+            return
+        if value <= 0:
+            return
         if self.shift_active or self.modo_clip_activo:
-            self._transport.set_play_button(None)
+            # self._transport.set_play_button(None)
             if value > 0:
                 # * shift, arm track and overdub
                 self.Actions.button_armoverdub()
         else:
-            self._transport.set_play_button(self._pads2[8])
+            # self._transport.set_play_button(self._pads2[8])
             if value > 0:
                 # * normal, play pause button
                 self.Actions.button_playpause()
@@ -1149,30 +1108,37 @@ class mMiniLabMk2(ArturiaControlSurface):
 
     # * n121 - stop / undo
     def _pads2_n9(self, value):
+        pad_id = 9
+        if self.try_handle_track_action(pad_id, value):
+            return
+        if value <= 0:
+            return
         # * shift, undo
         if self.shift_active or self.modo_clip_activo:
-            self._transport.set_stop_button(None)
+            # self._transport.set_stop_button(None)
             if value > 0:
                 self.song_instance.undo()
         # * normal, stop
         else:
-            self._transport.set_stop_button(self._pads2[9])
-            if value > 0:
-                if self.song_instance.is_playing:
-                    self.song_instance.stop_playing()
+            self.Actions.button_stopjump()
         self._update_leds()
 
     # TODO: Usar un pad para guardar el estado del loop y recuperarlo despues
     # * n122 - overdub / nope
     def _pads2_n10(self, value):
+        pad_id = 10
+        if self.try_handle_track_action(pad_id, value):
+            return
+        if value <= 0:
+            return
         # * shift,
         if self.shift_active or self.modo_clip_activo:
-            self._transport.set_overdub_button(None)
+            # self._transport.set_overdub_button(None)
             if value > 0:
                 return
 
         else:
-            self._transport.set_overdub_button(self._pads2[10])
+            # self._transport.set_overdub_button(self._pads2[10])
             if value > 0:
                 # * normal, overdub
                 self.Actions.button_overdub()
@@ -1180,17 +1146,26 @@ class mMiniLabMk2(ArturiaControlSurface):
 
     # * n123 - undo / none
     def _pads2_n11(self, value):
+        pad_id = 11
+        if self.try_handle_track_action(pad_id, value):
+            return
+        if value <= 0:
+            return
         if self.shift_active or self.modo_clip_activo:
             if value > 0:
                 pass
-        else:
-            if value > 0:
-                # * normal, undo
-                self.song_instance.undo()
+        elif value > 0:
+            # * normal, undo
+            self.song_instance.undo()
         self._update_leds()
 
     # * n124 - alternate_view detail
     def _pads2_n12(self, value):
+        pad_id = 12
+        if self.try_handle_track_action(pad_id, value):
+            return
+        if value <= 0:
+            return
         # * shift, alternate_view detail
         if self.shift_active or self.modo_clip_activo:
             if value > 0:
@@ -1202,22 +1177,31 @@ class mMiniLabMk2(ArturiaControlSurface):
                 self.Actions.button_alternate_viewdetail()
         self._update_leds()
 
-    # *n125 - nope /  quantize
+    # *n125 - solo /  quantize
     def _pads2_n13(self, value):
-
+        pad_id = 13
+        if self.try_handle_track_action(pad_id, value):
+            return
+        if value <= 0:
+            return
         if self.shift_active or self.modo_clip_activo:
-            self._transport.set_stop_button(None)
+            # self._transport.set_stop_button(None)
             if self.application().view.is_view_visible("Detail/Clip"):
                 if value > 0:
                     # * shift, quantize
                     self.Actions.button_quantize_song()
         # * normal,
-        else:
-            self._update_leds()
+        elif value > 0:
+            self.Actions.button_soloexclusive()
         self._update_leds()
 
     # *n126 - new scene / scrub
     def _pads2_n14(self, value):
+        pad_id = 14
+        if self.try_handle_track_action(pad_id, value):
+            return
+        if value <= 0:
+            return
         if self.shift_active or self.modo_clip_activo:
             if self.application().view.is_view_visible("Detail/Clip"):
                 # * shift, scrub
@@ -1233,15 +1217,18 @@ class mMiniLabMk2(ArturiaControlSurface):
                             else:
                                 clip.scrub(clip.start_marker)
                             self.scrubbing_clips.append(clip)
-        else:
-            if value > 0:
-                # * normal, new scene from play
-                self.Actions.button_newscene_fplay()
+        elif value > 0:
+            # * normal, new scene from play
+            self.Actions.button_armexclusive()
         self._update_leds()
 
     # * n127 - play stop scene / play stop clip
     def _pads2_n15(self, value):
-
+        pad_id = 15
+        if self.try_handle_track_action(pad_id, value):
+            return
+        if value <= 0:
+            return
         if self.shift_active or self.modo_clip_activo:
             if self.application().view.is_view_visible("Detail/Clip"):
                 # * shift, play stop clip
@@ -1363,7 +1350,12 @@ class mMiniLabMk2(ArturiaControlSurface):
 
     # ? Leds stuff
     def _update_leds(self):
-        if self.shift_active or self.modo_clip_activo:
+        logger.info("update_leds, enc0_button = " + str(self.enc0_button))
+        if self.enc0_button:
+            _leds_MuteMode(self)
+        elif self.enc8_button:
+            _leds_ArmMode(self)
+        elif self.shift_active or self.modo_clip_activo:
             _leds_ClipMode(self, self.song_instance)
         else:
             _leds_NormalMode(self, self.song_instance)
